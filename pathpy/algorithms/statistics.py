@@ -234,7 +234,7 @@ def get_bins(values, num_bins, log_bins=False):
     return bins
 
 
-def degree_dist_binned(network, num_bins=30, degree='degree', log_bins=True, is_pmf=True):
+def degree_dist_binned(network=None, degrees=None, num_bins=30, degree='degree', log_bins=True, is_pmf=True, bins_in=None):
     r"""Take a pathpy.network object and return the degree distribution.
 
     NOTE: Ignores singleton (degree 0) nodes.
@@ -242,15 +242,19 @@ def degree_dist_binned(network, num_bins=30, degree='degree', log_bins=True, is_
     Parameters
     ---------
     network: Network
-        The network to compute the degree distribution
+        The network to compute the degree distribution. Ignored if degrees is not None.
+    degrees: list-like
+        Precomputed degrees to bin. If specified, network parameter is ignored.
     num_bins: int
-        Number of bins in the histogram
+        Number of bins in the histogram. Ignored if bins_in is specified.
     degree: str
-        Type of degree. Options are degree (total), indegree, outdegree
+        Type of degree. Options are degree (total), indegree, outdegree. Ignored if degrees is not None.
     log_bins: logical
-        Bin degrees logarithmically or linearly
+        Bin degrees logarithmically or linearly. Ignored if bins_in is specified.
     is_pmf: logical
         Compute probability mass function or density
+    bins_in: None or list-like
+        Precomputed bins to use rather than calling get_bins. Optional.
 
     Returns
     -------
@@ -263,31 +267,40 @@ def degree_dist_binned(network, num_bins=30, degree='degree', log_bins=True, is_
     assert degree in ['degree', 'indegree', 'outdegree', 'inweight', 'outweight', 'weight'],\
             'Unknown degree property'
 
-    if network.directed:
-        if degree == 'degree':
-            degrees = _np.array([attr['indegree']+attr['outdegree'] for _,attr in network.nodes.items()])
-        elif degree == 'weight':
-            degrees = _np.array([attr['inweight']+attr['outweight'] for _,attr in network.nodes.items()])
+    assert (network is not None) or (degrees is not None), 'network and degrees can not both be None.'
+
+    if degrees is None:
+        ## compute the degree values to be binned
+        if network.directed:
+            if degree == 'degree':
+                degrees = _np.array([attr['indegree']+attr['outdegree'] for _,attr in network.nodes.items()])
+            elif degree == 'weight':
+                degrees = _np.array([attr['inweight']+attr['outweight'] for _,attr in network.nodes.items()])
+            else:
+                degrees = _np.array([attr[degree] for _,attr in network.nodes.items()])
         else:
             degrees = _np.array([attr[degree] for _,attr in network.nodes.items()])
-    else:
-        degrees = _np.array([attr[degree] for _,attr in network.nodes.items()])
 
+    ## remove singleton nodes
     degrees = degrees[degrees>0]
-    bins = get_bins(degrees, num_bins, log_bins)
 
+    ## set the bins, either by calling get_bins or using precomputed bins_in
+    if bins_in is None:
+        bins = get_bins(degrees, num_bins, log_bins)
+    else:
+        bins = bins_in
+
+    ## Estimate the distribution
     if is_pmf:
         y, _ = _np.histogram(degrees, bins=bins, density=False)
         p = y/float(y.sum())
     else:
         p, _ = _np.histogram(degrees, bins=bins, density=True)
 
+    ## Compute the centers of the bins
     x = bins[1:] - _np.diff(bins)/2.0
 
-    x = x[p>0]
-    p = p[p>0]
-
-    return x, p
+    return x, p, bins
 
 
 def clustering_by_degree(network, num_bins=20, degree='degree', binned=True, log_bins=False):
