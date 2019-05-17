@@ -74,7 +74,7 @@ def paths_from_random_walk(network, l, n=1, start_node=None):
         p.add_path(tuple(path))
     return p
 
-def random_paths(network, paths_orig, rand_frac=1.0):
+def random_paths(network, paths_orig, order=1, rand_frac=1.0, expand_subpaths=True):
     """
     Generates Markovian paths of a random walker in a given network
     and returns them as a paths object.
@@ -89,17 +89,25 @@ def random_paths(network, paths_orig, rand_frac=1.0):
     """
     p_rnd = Paths()
     for l in paths_orig.paths:
+        if l < order:
+            continue
+
         for path, pcounts in paths_orig.paths[l].items():
             if pcounts[1] > 0:
                 n_path = int(pcounts[1])
                 n_path_rand = _np.random.binomial(n_path, rand_frac)
                 n_path_keep = n_path - n_path_rand
-                
+
+                if order == 1:
+                    start_node = path[0]
+                else:
+                    start_node = network.separator.join(path[0:order])
+
                 ## Add the random paths
                 if n_path_rand > 0:
-                    p_rnd += paths_from_random_walk(network, l, n_path_rand, path[0])
-                
+                    p_rnd += paths_from_random_walk(network, l, n_path_rand, start_node)
+
                 ## Keep the rest
                 if n_path_keep > 0:
-                    p_rnd.add_path(path, frequency=n_path_keep)
+                    p_rnd.add_path(path, frequency=n_path_keep, expand_subpaths=expand_subpaths)
     return p_rnd

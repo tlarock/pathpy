@@ -526,7 +526,7 @@ class Paths:
                 obs_count += self.paths[k][p][1]
         return obs_count
 
-    def expand_subpaths(self):
+    def expand_subpaths(self, max_subpath_length=None):
         """
         This function implements the sub path expansion, i.e.
         for a four-gram a,b,c,d, the paths a->b, b->c, c->d of
@@ -540,6 +540,9 @@ class Paths:
         # nothing to see here ...
         if not self.paths:
             return
+
+        if max_subpath_length is None:
+            max_subpath_length = self.max_subpath_length
 
         Log.add('Calculating sub path statistics ... ')
 
@@ -564,7 +567,7 @@ class Paths:
 
                 # compute the maximum length of sub paths to consider
                 # (maximum up to pathLength)
-                max_length = min(self.max_subpath_length + 1, path_length)
+                max_length = min(max_subpath_length + 1, path_length)
 
                 # Generate all subpaths of length k for k = 0 to k = max_len-1 (inclusive)
                 for k in range(max_length):
