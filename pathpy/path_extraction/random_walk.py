@@ -28,6 +28,8 @@ import random
 
 import numpy as _np
 
+from multiprocessing import Pool
+
 from pathpy.utils import Log, Severity
 from pathpy.classes.network import Network
 from pathpy.classes.paths import Paths
@@ -53,7 +55,7 @@ def random_walk(network, l, n=1, start_node=None):
     return paths_from_random_walk(network, l, n, start_node)
 
 
-def paths_from_random_walk(network, l, n=1, start_node=None):
+def paths_from_random_walk(network, l, n=1, start_node=None, expand_subpaths=True):
     """
     Generates n paths of a random walker in the given network
     and returns them as a paths object.
@@ -71,10 +73,10 @@ def paths_from_random_walk(network, l, n=1, start_node=None):
     p = Paths()
     for i in range(n):
         path = algorithms.random_walk.generate_walk(network, l, start_node)
-        p.add_path(tuple(path))
+        p.add_path(tuple(path), expand_subpaths=expand_subpaths)
     return p
 
-def random_paths(network, paths_orig, order=1, rand_frac=1.0, expand_subpaths=True):
+def random_paths(network, paths_orig, order=1, rand_frac=1.0, expand_subpaths=True, processes=1):
     """
     Generates Markovian paths of a random walker in a given network
     and returns them as a paths object.
@@ -88,6 +90,7 @@ def random_paths(network, paths_orig, order=1, rand_frac=1.0, expand_subpaths=Tr
         The fraction of paths that will be randomised
     """
     p_rnd = Paths()
+    params_list = []
     for l in paths_orig.paths:
         if l < order:
             continue
@@ -95,7 +98,9 @@ def random_paths(network, paths_orig, order=1, rand_frac=1.0, expand_subpaths=Tr
         for path, pcounts in paths_orig.paths[l].items():
             if pcounts[1] > 0:
                 n_path = int(pcounts[1])
-                n_path_rand = _np.random.binomial(n_path, rand_frac)
+                n_path_rand = n_path
+                if rand_frac < 1.0:
+                    n_path_rand = _np.random.binomial(n_path, rand_frac)
                 n_path_keep = n_path - n_path_rand
 
                 if order == 1:
@@ -105,9 +110,19 @@ def random_paths(network, paths_orig, order=1, rand_frac=1.0, expand_subpaths=Tr
 
                 ## Add the random paths
                 if n_path_rand > 0:
-                    p_rnd += paths_from_random_walk(network, l, n_path_rand, start_node)
+                    if processes == 1:
+                        p_rnd += paths_from_random_walk(network, l, n_path_rand, start_node, expand_subpaths)
+                    else:
+                        params_list.append( [network, l, n_path_rand, start_node, expand_subpaths] )
 
                 ## Keep the rest
                 if n_path_keep > 0:
                     p_rnd.add_path(path, frequency=n_path_keep, expand_subpaths=expand_subpaths)
+
+    if processes > 1:
+        with Pool(processes) as p:
+            results= p.starmap(paths_from_random_walk, params_list)
+            for path in results:
+                p_rnd += path
+
     return p_rnd
